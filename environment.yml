@@ -1,0 +1,16 @@
+name: bbox_env
+channels:
+  - conda-forge
+dependencies:
+  - python=3.10
+  - numpy>=2.2
+  - matplotlib>=3.10
+  - rasterio>=1.4
+  - rioxarray>=0.19
+  - pyproj>=3.7
+  - pyside6>=6.9
+  - xarray>=2025
+  - ipywidgets  
+  - jupyterlab  
+  - pip
+prefix: ./envs/bbox_env
