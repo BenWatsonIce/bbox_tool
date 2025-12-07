@@ -136,7 +136,7 @@ pythonviewer.plot_results(
 )
 ```
 
-# The stacked figure is then automaticall saved to:
+# The stacked figure is then automatically saved to:
 
 ```python
 <base_path>/deposit/stacked_rasters.png unless save=False
