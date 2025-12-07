@@ -67,7 +67,7 @@ base_path = r"<PATH_TO_YOUR_DATA_FOLDER>"
 # 3. Specify the years you'd like to incorporate into your workflow's run of the script:
 
 ```python 
-```years = [2014, 2016, 2019]
+years = [2014, 2016, 2019]
 ```
 
 # 4. Create the viewer object:
