@@ -1,7 +1,7 @@
 import os
 import numpy as np
 import matplotlib
-matplotlib.use("Qt5Agg")  # Interactive window
+matplotlib.use("Qt5Agg") 
 import matplotlib.pyplot as plt
 from matplotlib.widgets import RectangleSelector, Button
 from pyproj import Transformer
@@ -27,6 +27,24 @@ class BBoxViewer:
         self.to_latlon = None
         self.from_latlon = None
         self.image = None
+        self.colourbar_on = True
+        self.colourbar_label = "Normalised reflectance"
+
+    def bbox_coords(self, lon_min, lon_max, lat_min, lat_max):
+        """
+        Manually set the bounding box in lat/lon.
+        If set, select_bbox() will skip the interactive window.
+        """
+        self.bbox_latlon = (lon_min, lon_max, lat_min, lat_max)
+        if self.from_latlon is None:
+            raise RuntimeError("Load data first with load_data() to set CRS.")
+        x1c, y1c = self.from_latlon.transform(lon_min, lat_min)
+        x2c, y2c = self.from_latlon.transform(lon_max, lat_max)
+        self.bbox_crs = (min(x1c, x2c), max(x1c, x2c),
+                        min(y1c, y2c), max(y1c, y2c))
+        print("Manual LAT/LON bounding box set:", self.bbox_latlon)
+        print("Manual raster CRS bounding box set:", self.bbox_crs)
+
 
     def load_data(self):
         """Load first year's raster to setup coordinate transforms"""
@@ -40,6 +58,9 @@ class BBoxViewer:
 
     def select_bbox(self):
         """Open interactive Qt window to select bounding box and confirm"""
+        if self.bbox_latlon is not None:
+            print("Bounding box already set manually, skipping interactive selection.")
+            return
         fig, ax = plt.subplots(figsize=(10, 10))
         ax.imshow(self.image, cmap="gray", origin='upper')
         ax.set_title(f"Draw bounding box on {self.years[0]} image → click CONFIRM", fontsize=12)
@@ -89,68 +110,170 @@ class BBoxViewer:
 
         plt.show()
 
+    def apply_bbox_to_all(self):
+        """
+        Clip all rasters using the selected bounding box
+        and return dict of clipped arrays and spatial extents.
+        """
+        if self.bbox_crs is None:
+            raise ValueError("Bounding box not set. Run select_bbox() first.")
+
+        clipped = {}
+        extents = {}
+
+        for yr in self.years:
+            fp = os.path.join(self.base_path, yr, f"{yr}.tif")
+            ds = rxr.open_rasterio(fp).squeeze()
+
+            ds = ds.rio.clip_box(
+                minx=self.bbox_crs[0], maxx=self.bbox_crs[1],
+                miny=self.bbox_crs[2], maxy=self.bbox_crs[3]
+            )
+
+            arr = np.nan_to_num(ds.values, nan=0)
+            clipped[yr] = arr
+
+            extents[yr] = [
+                ds.x.min().item(),
+                ds.x.max().item(),
+                ds.y.min().item(),
+                ds.y.max().item()
+            ]
+
+        return clipped, extents
+
     @staticmethod
     def preprocess(img):
-        """Normalize image using 2–98 percentile stretch"""
+        """Normalise image using 2–98 percentile stretch"""
         p2, p98 = np.percentile(img, (2, 98))
         stretched = np.clip((img - p2) / (p98 - p2), 0, 1)
         stretched = np.power(stretched, 0.8)
         return stretched
 
-    def plot_results(self, save=True, save_path=None):
-        """Clip all datasets and plot them stacked; optionally save figure"""
-        # Load and clip datasets if not already loaded
-        if not self.datasets:
-            for yr in self.years:
-                fp = os.path.join(self.base_path, yr, f"{yr}.tif")
-                ds = rxr.open_rasterio(fp).squeeze()
-                ds = ds.rio.clip_box(
-                    minx=self.bbox_crs[0], maxx=self.bbox_crs[1],
-                    miny=self.bbox_crs[2], maxy=self.bbox_crs[3]
-                )
-                self.datasets.append(ds)
+    def set_colourbar(self, on=True, label="Normalised reflectance"):
+        """
+        Configure colourbar display for subsequent plots.
+
+        Parameters
+        ----------
+        on : bool
+            If True, colourbar will be shown. If False, it will be hidden.
+        label : str
+            Label to display alongside the colourbar.
+        """
+        self.colourbar_on = on
+        self.colourbar_label = label
+
+    def normalised_viewer(self, image, title="Normalised View", lower_percentile=2, upper_percentile=98, cmap="gray"):
+        p_low, p_high = np.percentile(image, [lower_percentile, upper_percentile])
+        stretched = np.clip((image - p_low) / (p_high - p_low), 0, 1)
+
+        plt.figure(figsize=(6, 6))
+        im_plot = plt.imshow(stretched, cmap=cmap)
+        plt.title(title)
+
+        if self.colourbar_on:
+            cbar = plt.colorbar(im_plot)
+            cbar.set_label(self.colourbar_label, rotation=90)
+            cbar.set_ticks([0, 0.2, 0.4, 0.6, 0.8, 1.0])
+
+        plt.axis("off")
+        plt.show()
+
+    def plot_results(self, titles=None, save=True, save_path=None, lower_percentile=2, upper_percentile=98, cmap="gray"):
+        """
+        Plot clipped rasters stacked vertically with optional custom titles,
+        normalisation, and a single shared colourbar.
+
+        Parameters
+        ----------
+        titles : dict or list
+            Custom titles per year.
+        save : bool
+            Whether to save the figure.
+        save_path : str
+            Path to save the figure.
+        lower_percentile : float
+            Lower percentile for normalisation.
+        upper_percentile : float
+            Upper percentile for normalisation.
+        cmap : str
+            Matplotlib colormap.
+        """
+        if self.bbox_crs is None:
+            raise ValueError("Bounding box not set. Run select_bbox() first.")
+
+        self.datasets = []
+        for yr in self.years:
+            fp = os.path.join(self.base_path, yr, f"{yr}.tif")
+            ds = rxr.open_rasterio(fp).squeeze()
+            ds = ds.rio.clip_box(
+                minx=self.bbox_crs[0], maxx=self.bbox_crs[1],
+                miny=self.bbox_crs[2], maxy=self.bbox_crs[3]
+            )
+            self.datasets.append(ds)
 
         crs = self.datasets[0].rio.crs
         transformer = Transformer.from_crs(crs, "EPSG:4326", always_xy=True)
 
-        fig, axes = plt.subplots(nrows=len(self.datasets), ncols=1,
-                                 figsize=(10, 5*len(self.datasets)), dpi=150)
+        fig, axes = plt.subplots(
+            nrows=len(self.datasets), ncols=1,
+            figsize=(10, 5*len(self.datasets)), dpi=300
+        )
 
         if len(self.datasets) == 1:
             axes = [axes]
 
+        im_list = []
+
         for ax, ds, yr in zip(axes, self.datasets, self.years):
-            arr = self.preprocess(ds.values)
-            ax.imshow(
-                arr,
-                cmap="gray",
-                vmin=0, vmax=1,
-                extent=[ds.x.min().item(), ds.x.max().item(), ds.y.min().item(), ds.y.max().item()],
-                origin="upper",
-                interpolation="none",
-                aspect='equal'
-            )
+            # Normalisation
+            p_low, p_high = np.percentile(ds.values, [lower_percentile, upper_percentile])
+            arr = np.clip((ds.values - p_low) / (p_high - p_low), 0, 1)
+            im = ax.imshow(arr, cmap=cmap,
+                        extent=[ds.x.min(), ds.x.max(), ds.y.min(), ds.y.max()],
+                        origin="upper", aspect="equal")
+            im_list.append(im)
 
-            # Add lat/lon ticks
+            # Tick conversion to lat/lon
             xlim, ylim = ax.get_xlim(), ax.get_ylim()
-            x_ticks_m = np.linspace(xlim[0], xlim[1], 6)
-            y_ticks_m = np.linspace(ylim[0], ylim[1], 6)
-            lon_ticks, lat_ticks = transformer.transform(x_ticks_m, y_ticks_m)
-            ax.set_xticks(x_ticks_m)
-            ax.set_xticklabels([f"{lon:.2f}°E" for lon in lon_ticks], fontsize=8)
-            ax.set_yticks(y_ticks_m)
-            ax.set_yticklabels([f"{lat:.2f}°N" for lat in lat_ticks], fontsize=8)
+            xticks = np.linspace(xlim[0], xlim[1], 5)
+            yticks = np.linspace(ylim[0], ylim[1], 5)
+            lons, lats = transformer.transform(xticks, yticks)
 
-            ax.set_title(f"{yr}", fontsize=12)
-            ax.set_xlabel("Longitude (°E)")
-            ax.set_ylabel("Latitude (°N)")
+            ax.set_xticks(xticks)
+            ax.set_yticks(yticks)
+            ax.set_xticklabels([f"{lon:.2f}°E" for lon in lons], fontsize=8)
+            ax.set_yticklabels([f"{lat:.2f}°N" for lat in lats], fontsize=8)
+
+            # Apply user titles
+            if titles:
+                if isinstance(titles, dict):
+                    ax.set_title(titles.get(str(yr), str(yr)), fontsize=12)
+                elif isinstance(titles, list) and len(titles) == len(self.years):
+                    idx = self.years.index(yr)
+                    ax.set_title(titles[idx], fontsize=12)
+            else:
+                ax.set_title(str(yr), fontsize=12)
+
+            ax.set_xlabel("Longitude (°E)", fontsize=9)
+            ax.set_ylabel("Latitude (°N)", fontsize=9)
 
         fig.tight_layout()
-        plt.show()
+
+        # Single shared colourbar
+        if self.colourbar_on and im_list:
+            from matplotlib.cm import ScalarMappable
+            sm = ScalarMappable(cmap=cmap, norm=im_list[0].norm)
+            sm.set_array([])
+            cbar = fig.colorbar(sm, ax=axes, fraction=0.046, pad=0.04)
+            cbar.set_label(self.colourbar_label, rotation=90, fontsize=10)
+            cbar.set_ticks([0, 0.2, 0.4, 0.6, 0.8, 1.0])
 
         if save:
-            # Default save path in 'deposit' folder
             save_path = save_path or os.path.join(self.base_path, "deposit", "stacked_rasters.png")
             os.makedirs(os.path.dirname(save_path), exist_ok=True)
-            fig.savefig(save_path, dpi=400, bbox_inches="tight", format="png")
-            print(f"Saved figure to: {save_path}")
+            fig.savefig(save_path, dpi=300, bbox_inches="tight")
+            print(f"Saved: {save_path}")
+
+        plt.show()

@@ -1,4 +1,4 @@
-# BBox Tool for Change Visualisation
+## **BBox Tool for Change Visualisation**
 
 This tool allows the user to visually assess surface changes within raster data,
 by selecting a bounding box on an initial reference image and applying the same
@@ -6,51 +6,114 @@ spatial crop across multiple years of satellite or other raster data.
 
 ---
 
-## Features
+# Features
 
 - Load multiple raster images from a folder by year name
-- Interactive bounding box selection using the first image
+- Interactive bounding box selection using the first image, with the option to manually set bounding box coordinates instead
 - Automatic clipping and visualisation of change through time
-- Normalised reflectance stretch for enhanced visual clarity (the percentile values in the stretch variable can be used to adjust this)
+- Normalised reflectance display with percentile-based stretch
+- Adjustable lower and upper percentile values to highlight specific ranges
+- Option to apply the same stretch across all images for consistent visual comparison
 - Returned bounding box coordinates, based on what you've drawn
+- Optional colourbar on all plots
+- Customisable label for the colourbar (default: "Normalised reflectance")
+- Can be toggled on or off for both stacked plots and single image views
 - The example data in this repo is Landsat 8 panchromatic band imagery that displays an area of Austfonna (Svalbard)
 
 ---
 
-## Usage notes
+# Usage notes
 
 The tool expects the data to be organised as: 
+
 
 <base_path>/
 │
 ├── 2014/
 │   └── 2014.tif
-├── 2015/
-│   └── 2015.tif
-├── 2025/
-│   └── 2025.tif
+├── 2016/
+│   └── 2016.tif
+├── 2019/
+│   └── 2019.tif
 ...
 
-Each folder must be named after the year of the image. This is to make the tool year agnostic and convenient! Each folder containing the data myst have a .tif file with the same name as the folder. 
+If your data covers a timescale shorter or longer than years (i.e. days, weeks or decades), consider saving it in another similar format. For example, if your data is daily, try:
 
-To use it in Python (Or use it in Jupyter Labs): 
+<base_path>/
+│
+├── 01012014/
+│   └── 01012014.tif
+├── 02012014/
+│   └── 02012014.tif
+├── 03012014/
+│   └── 03012014.tif
+
+Each folder must be named the same as the image. This is to make the tool agnostic and convenient! So, make sur each folder containing the data has a .tif file with the same name as the folder. 
+
+## Usage guide
+
+# 1. To use it in Python (Or use it in Jupyter Labs), import the viewer class: 
 
 from bbox_tool.viewer import BBoxViewer
 
-# Path to the folder containing year subfolders
+# 2. Set the path to your data folder:
+ 
 base_path = r"<PATH_TO_YOUR_DATA_FOLDER>"
 
-# Optionally, specify the years you want to process
-years = [2014, 2025]
+# 3. Specify the years you'd like to incorporate into your workflow's run of the script:
+ 
+years = [2014, 2016, 2019]
 
-# Create the viewer object
+# 4. Create the viewer object:
+
 viewer = BBoxViewer(base_path, years)
 
-# Step 1: Load the first year's data
+# 5. Load the first year's raster data to standardise the CRS:
+
 viewer.load_data()
 
-# Step 2: Open interactive window to draw bounding box
+# 6. If you already have a set of bounding box coordinates, manually input them this way:
+
+viewer.bbox_coords(lon_min=1, lon_max=2, lat_min=3, max_lat=4)
+
+# 7. If you want to specify a new bounding box interactively, use:
+
 viewer.select_bbox()
 
-# Step 3: Plot all clipped datasets and save figure (optional)
-viewer.plot_results()  # saves figure in <base_path>/deposit/stacked_rasters.png
+# 8. Iterate the application of your bounding box to all years in your dataset stepwise:
+
+clipped, extents = viewer.apply_bbox_to_all()
+
+# Visualise a single image with display options set by numpy and matplotlib as an example plot:
+
+viewer.normalised_viewer(
+    image=clipped["year"], 
+    title="2016 Surge Velocity",
+    lower_percentile=2,
+    upper_percentile=98,
+    cmap="gray"
+)
+
+# 10. Visualise all years stacked with optional custom titles and a shared colourbar:
+
+titles_dict = {
+    "2014": "A) 2014: Before",
+    "2016": "B) 2016: During",
+    "2019": "C) 2019: After"
+}
+
+viewer.set_colourbar(on=True, label="Normalised Band 8 Surface Reflectance")  # optional to the user
+
+# 11. Then plot:
+
+viewer.plot_results(
+    titles=titles_dict,
+    lower_percentile=2,
+    upper_percentile=98,
+    cmap="gray"
+)
+
+# The stacked figure is then automaticall saved to:
+
+<base_path>/deposit/stacked_rasters.png unless save=False
+
