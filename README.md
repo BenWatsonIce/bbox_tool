@@ -12,12 +12,10 @@ spatial crop across multiple years of satellite or other raster data.
 - Interactive bounding box selection using the first image, with the option to manually set bounding box coordinates instead
 - Automatic clipping and visualisation of change through time
 - Normalised reflectance display with percentile-based stretch
-- Adjustable lower and upper percentile values to highlight specific ranges
-- Option to apply the same stretch across all images for consistent visual comparison
-- Returned bounding box coordinates, based on what you've drawn
-- Optional colourbar on all plots
-- Customisable label for the colourbar (default: "Normalised reflectance")
-- Can be toggled on or off for both stacked plots and single image views
+- Adjustable lower and upper percentile values to highlight specific spectral ranges
+- Option to apply the same stretch across all images for consistent visual comparison with enhanced surface features
+- Returned bounding box coordinates, based on what you've drawn, both in the raster's CRS and lat/long coordinates
+- Optional colourbar on all plots with customisable label (default: "Normalised reflectance")
 - The example data in this repo is Landsat 8 panchromatic band imagery that displays an area of Austfonna (Svalbard)
 
 ---
