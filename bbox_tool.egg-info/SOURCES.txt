@@ -1,0 +1,10 @@
+LICENCE.txt
+README.md
+setup.py
+bbox_tool/__init__.py
+bbox_tool/viewer.py
+bbox_tool.egg-info/PKG-INFO
+bbox_tool.egg-info/SOURCES.txt
+bbox_tool.egg-info/dependency_links.txt
+bbox_tool.egg-info/requires.txt
+bbox_tool.egg-info/top_level.txt

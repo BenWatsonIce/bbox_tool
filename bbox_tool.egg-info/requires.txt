@@ -1,0 +1,6 @@
+numpy
+matplotlib
+rioxarray
+rasterio
+pyproj
+ipywidgets
